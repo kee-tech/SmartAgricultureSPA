@@ -1,9 +1,8 @@
-
 require('dotenv').config();
 
-const db = require('./db');
 const express = require('express');
 const cors = require('cors');
+const db = require('./db');
 const agricultureData = require('./agriculture');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -15,7 +14,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 app.use(cors());
 app.use(express.json());
 
-// -------------------- PUBLIC AGRICULTURE APIs --------------------
+// --------------------------------------------------
+// BASIC API ROUTES
+// --------------------------------------------------
 
 app.get('/', (req, res) => {
   res.send('Smart Agriculture API is running!');
@@ -41,7 +42,9 @@ app.get('/api/irrigation', (req, res) => {
   res.json(agricultureData.irrigation);
 });
 
-// -------------------- JWT AUTHENTICATION --------------------
+// --------------------------------------------------
+// JWT AUTHENTICATION MIDDLEWARE
+// --------------------------------------------------
 
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -69,86 +72,17 @@ function requireAuth(req, res, next) {
   }
 }
 
-// -------------------- GET ONLY THE LOGGED-IN USER'S CROPS --------------------
-
-app.get('/api/crops-db', requireAuth, async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      'SELECT id, name, season, area, status, created_at FROM crops WHERE user_id = ? ORDER BY id DESC',
-      [req.user.userId]
-    );
-
-    res.json(rows);
-  } catch (error) {
-    console.error('Fetch crops error:', error);
-    res.status(500).json({
-      message: 'Failed to fetch crops.',
-    });
-  }
-});
-
-// -------------------- REGISTER A CROP FOR THE LOGGED-IN USER --------------------
-
-app.post('/api/crops-db', requireAuth, async (req, res) => {
-  try {
-    const { name, season, area, status } = req.body;
-
-    if (
-      typeof name !== 'string' ||
-      !name.trim() ||
-      typeof season !== 'string' ||
-      !season.trim() ||
-      area === undefined ||
-      area === '' ||
-      !Number.isFinite(Number(area)) ||
-      Number(area) <= 0 ||
-      typeof status !== 'string' ||
-      !status.trim()
-    ) {
-      return res.status(400).json({
-        message: 'Please enter valid details for all crop fields.',
-      });
-    }
-
-    const [result] = await db.query(
-      'INSERT INTO crops (name, season, area, status, user_id) VALUES (?, ?, ?, ?, ?)',
-      [
-        name.trim(),
-        season.trim(),
-        Number(area),
-        status.trim(),
-        req.user.userId,
-      ]
-    );
-
-    res.status(201).json({
-      message: 'Crop registered successfully.',
-      id: result.insertId,
-    });
-  } catch (error) {
-    console.error('Register crop error:', error);
-    res.status(500).json({
-      message: 'Failed to register crop.',
-    });
-  }
-});
-
-// -------------------- SIGN UP --------------------
+// --------------------------------------------------
+// SIGNUP
+// --------------------------------------------------
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    if (
-      typeof name !== 'string' ||
-      !name.trim() ||
-      typeof email !== 'string' ||
-      !email.trim() ||
-      typeof password !== 'string' ||
-      !password
-    ) {
+    if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({
-        message: 'Name, email, and password are required.',
+        message: 'Please provide your name, email and password.',
       });
     }
 
@@ -160,10 +94,9 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const [existingUsers] = await db.query(
-      'SELECT id FROM users WHERE email = ?',
-      [normalizedEmail]
-    );
+    const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [
+      normalizedEmail,
+    ]);
 
     if (existingUsers.length > 0) {
       return res.status(409).json({
@@ -171,14 +104,15 @@ app.post('/api/auth/signup', async (req, res) => {
       });
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const [result] = await db.query(
-      'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
-      [name.trim(), normalizedEmail, passwordHash]
-    );
+    const [result] = await db.query('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', [
+      name.trim(),
+      normalizedEmail,
+      hashedPassword,
+    ]);
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Account created successfully.',
       user: {
         id: result.insertId,
@@ -195,28 +129,31 @@ app.post('/api/auth/signup', async (req, res) => {
       });
     }
 
-    res.status(500).json({
-      message: 'Could not create account.',
+    return res.status(500).json({
+      message: 'Could not create your account.',
     });
   }
 });
 
-// -------------------- LOG IN --------------------
+// --------------------------------------------------
+// LOGIN
+// --------------------------------------------------
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (typeof email !== 'string' || !email.trim() || typeof password !== 'string' || !password) {
+    if (!email?.trim() || !password) {
       return res.status(400).json({
-        message: 'Email and password are required.',
+        message: 'Please enter your email and password.',
       });
     }
 
-    const [users] = await db.query(
-      'SELECT id, name, email, password_hash FROM users WHERE email = ?',
-      [email.trim().toLowerCase()],
-    );
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [users] = await db.query('SELECT id, name, email, password FROM users WHERE email = ?', [
+      normalizedEmail,
+    ]);
 
     if (users.length === 0) {
       return res.status(401).json({
@@ -225,8 +162,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const user = users[0];
-
-    const passwordMatches = await bcrypt.compare(password, user.password_hash);
+    const passwordMatches = await bcrypt.compare(password, user.password);
 
     if (!passwordMatches) {
       return res.status(401).json({
@@ -249,7 +185,7 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '2h' },
     );
 
-    res.json({
+    return res.json({
       message: 'Login successful.',
       token,
       user: {
@@ -261,14 +197,221 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
 
-    res.status(500).json({
-      message: 'Could not log in.',
-      detail: error.message,
+    return res.status(500).json({
+      message: 'Login failed. Please try again.',
     });
   }
 });
 
-// -------------------- START SERVER --------------------
+// --------------------------------------------------
+// GET SAVED CROPS FOR THE LOGGED-IN USER
+// --------------------------------------------------
+
+app.get('/api/crops-db', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, name, season, area, status, created_at
+       FROM crops
+       WHERE user_id = ?
+       ORDER BY id DESC`,
+      [req.user.userId],
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    console.error('Load crops error:', error);
+
+    return res.status(500).json({
+      message: 'Could not load saved crops from MySQL.',
+    });
+  }
+});
+
+// --------------------------------------------------
+// REGISTER A CROP
+// --------------------------------------------------
+
+app.post('/api/crops-db', requireAuth, async (req, res) => {
+  try {
+    const { name, season, area, status } = req.body;
+    const numericArea = Number(area);
+
+    if (!name?.trim() || !season || !Number.isFinite(numericArea) || numericArea <= 0 || !status) {
+      return res.status(400).json({
+        message: 'Please enter valid crop details.',
+      });
+    }
+
+    const [result] = await db.query(
+      `INSERT INTO crops (user_id, name, season, area, status)
+       VALUES (?, ?, ?, ?, ?)`,
+      [req.user.userId, name.trim(), season, numericArea, status],
+    );
+
+    return res.status(201).json({
+      message: 'Crop registered successfully.',
+      id: result.insertId,
+    });
+  } catch (error) {
+    console.error('Register crop error:', error);
+
+    return res.status(500).json({
+      message: 'Could not save crop to MySQL.',
+    });
+  }
+});
+
+// --------------------------------------------------
+// GET SETTINGS FOR THE LOGGED-IN FARMER
+// --------------------------------------------------
+
+app.get('/api/settings', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT soil_type, soil_moisture, soil_ph,
+              temperature, humidity, rainfall,
+              irrigation_status, water_usage
+       FROM farmer_settings
+       WHERE user_id = ?`,
+      [req.user.userId],
+    );
+
+    if (rows.length === 0) {
+      return res.json({
+        soil: {
+          type: 'Loamy',
+          moisture: 45,
+          ph: 6.5,
+        },
+        weather: {
+          temperature: 28,
+          humidity: 65,
+          rainfall: 0,
+        },
+        irrigation: {
+          status: 'Automatic',
+          waterUsage: 120,
+          unit: 'litres',
+        },
+      });
+    }
+
+    const settings = rows[0];
+
+    return res.json({
+      soil: {
+        type: settings.soil_type,
+        moisture: Number(settings.soil_moisture),
+        ph: Number(settings.soil_ph),
+      },
+      weather: {
+        temperature: Number(settings.temperature),
+        humidity: Number(settings.humidity),
+        rainfall: Number(settings.rainfall),
+      },
+      irrigation: {
+        status: settings.irrigation_status,
+        waterUsage: Number(settings.water_usage),
+        unit: 'litres',
+      },
+    });
+  } catch (error) {
+    console.error('Load settings error:', error);
+
+    return res.status(500).json({
+      message: 'Could not load settings.',
+    });
+  }
+});
+
+// --------------------------------------------------
+// SAVE OR UPDATE SETTINGS IN MYSQL
+// --------------------------------------------------
+
+app.put('/api/settings', requireAuth, async (req, res) => {
+  try {
+    const { soil, weather, irrigation } = req.body;
+
+    const soilTypes = ['Loamy', 'Clay', 'Sandy', 'Silty', 'Peaty', 'Chalky'];
+
+    const irrigationOptions = ['Automatic', 'Manual', 'On', 'Off'];
+
+    const moisture = Number(soil?.moisture);
+    const ph = Number(soil?.ph);
+    const temperature = Number(weather?.temperature);
+    const humidity = Number(weather?.humidity);
+    const rainfall = Number(weather?.rainfall);
+    const waterUsage = Number(irrigation?.waterUsage);
+
+    if (
+      !soilTypes.includes(soil?.type) ||
+      !Number.isFinite(moisture) ||
+      moisture < 0 ||
+      moisture > 100 ||
+      !Number.isFinite(ph) ||
+      ph < 0 ||
+      ph > 14 ||
+      !Number.isFinite(temperature) ||
+      temperature < -50 ||
+      temperature > 70 ||
+      !Number.isFinite(humidity) ||
+      humidity < 0 ||
+      humidity > 100 ||
+      !Number.isFinite(rainfall) ||
+      rainfall < 0 ||
+      !irrigationOptions.includes(irrigation?.status) ||
+      !Number.isFinite(waterUsage) ||
+      waterUsage < 0
+    ) {
+      return res.status(400).json({
+        message: 'Please enter valid settings.',
+      });
+    }
+
+    await db.query(
+      `INSERT INTO farmer_settings
+        (user_id, soil_type, soil_moisture, soil_ph,
+         temperature, humidity, rainfall,
+         irrigation_status, water_usage)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         soil_type = VALUES(soil_type),
+         soil_moisture = VALUES(soil_moisture),
+         soil_ph = VALUES(soil_ph),
+         temperature = VALUES(temperature),
+         humidity = VALUES(humidity),
+         rainfall = VALUES(rainfall),
+         irrigation_status = VALUES(irrigation_status),
+         water_usage = VALUES(water_usage)`,
+      [
+        req.user.userId,
+        soil.type,
+        moisture,
+        ph,
+        temperature,
+        humidity,
+        rainfall,
+        irrigation.status,
+        waterUsage,
+      ],
+    );
+
+    return res.json({
+      message: 'Settings saved successfully.',
+    });
+  } catch (error) {
+    console.error('Save settings error:', error);
+
+    return res.status(500).json({
+      message: 'Could not save settings.',
+    });
+  }
+});
+
+// --------------------------------------------------
+// START SERVER
+// --------------------------------------------------
+
 app.listen(PORT, () => {
   console.log('Smart Agriculture backend running at http://localhost:' + PORT);
 });
