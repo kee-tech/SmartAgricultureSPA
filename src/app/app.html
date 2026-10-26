@@ -1,0 +1,264 @@
+
+<div class="auth-page" *ngIf="!isLoggedIn">
+  <div class="auth-card">
+    <div class="auth-logo">🌱</div>
+    <h1>Smart Agriculture</h1>
+    <p class="auth-subtitle">Your farm, managed smarter.</p>
+
+    <div class="auth-tabs">
+      <button
+        type="button"
+        [class.active]="authMode === 'login'"
+        (click)="switchAuthMode('login')">
+        Login
+      </button>
+      <button
+        type="button"
+        [class.active]="authMode === 'signup'"
+        (click)="switchAuthMode('signup')">
+        Sign Up
+      </button>
+    </div>
+
+    <h2>{{ authMode === 'login' ? 'Welcome Back!' : 'Create Account' }}</h2>
+    <p class="form-description">
+      {{
+      authMode === 'login'
+      ? 'Login to access your agriculture dashboard.'
+      : 'Join us to manage your farm efficiently.'
+      }}
+    </p>
+
+    <form (ngSubmit)="submitAuth()" #authNgForm="ngForm">
+      <div class="form-group" *ngIf="authMode === 'signup'">
+        <label for="authName">Full Name</label>
+        <input
+          id="authName"
+          type="text"
+          name="name"
+          [(ngModel)]="authForm.name"
+          placeholder="Enter your full name"
+          autocomplete="name"
+          required />
+      </div>
+
+      <div class="form-group">
+        <label for="authEmail">Email Address</label>
+        <input
+          id="authEmail"
+          type="email"
+          name="email"
+          [(ngModel)]="authForm.email"
+          placeholder="Enter your email"
+          autocomplete="email"
+          required />
+      </div>
+
+      <div class="form-group">
+        <label for="authPassword">Password</label>
+        <input
+          id="authPassword"
+          type="password"
+          name="password"
+          [(ngModel)]="authForm.password"
+          placeholder="Enter your password"
+          [attr.autocomplete]="authMode === 'login' ? 'current-password' : 'new-password'"
+          [minlength]="authMode === 'signup' ? 8 : null"
+          required />
+        <small *ngIf="authMode === 'signup'">
+          Password must contain at least 8 characters.
+        </small>
+      </div>
+
+      <div class="auth-message error-message" *ngIf="authError">
+        {{ authError }}
+      </div>
+
+      <div class="auth-message success-message" *ngIf="authSuccess">
+        {{ authSuccess }}
+      </div>
+
+      <button
+        class="auth-submit"
+        type="submit"
+        [disabled]="authLoading || authNgForm.invalid">
+        {{
+        authLoading
+        ? 'Please wait...'
+        : authMode === 'login'
+        ? 'Login to Dashboard'
+        : 'Create Account'
+        }}
+      </button>
+    </form>
+
+    <p class="auth-switch">
+      {{
+      authMode === 'login'
+      ? "Don't have an account?"
+      : 'Already have an account?'
+      }}
+      <button
+        type="button"
+        (click)="switchAuthMode(authMode === 'login' ? 'signup' : 'login')">
+        {{ authMode === 'login' ? 'Sign up' : 'Login' }}
+      </button>
+    </p>
+
+    <p class="auth-footer">🌿 Growing a smarter, greener future</p>
+  </div>
+</div>
+
+<div class="dashboard-page" *ngIf="isLoggedIn">
+  <header class="dashboard-header">
+    <div>
+      <h1>🌱 Smart Agriculture Platform</h1>
+      <p>Welcome, {{ currentUser?.name }}!</p>
+    </div>
+    <button type="button" class="logout-button" (click)="logout()">
+      Logout
+    </button>
+  </header>
+
+  <main class="dashboard-content">
+    <section class="welcome-banner">
+      <h2>Farm Dashboard</h2>
+      <p>Monitor your crops, soil, weather, and irrigation in one place.</p>
+    </section>
+
+    <div class="dashboard-message error-message" *ngIf="errorMessage">
+      {{ errorMessage }}
+    </div>
+    <div class="dashboard-message success-message" *ngIf="successMessage">
+      {{ successMessage }}
+    </div>
+
+    <p *ngIf="loading">Loading your agriculture data...</p>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <span class="stat-icon">🌾</span>
+        <h3>Registered Crops</h3>
+        <p class="stat-value">{{ crops.length }}</p>
+      </article>
+
+      <article class="stat-card">
+        <span class="stat-icon">🌱</span>
+        <h3>Soil Type</h3>
+        <p class="stat-value">{{ soil.type }}</p>
+        <p>Moisture: {{ soil.moisture }}% · pH: {{ soil.ph }}</p>
+      </article>
+
+      <article class="stat-card">
+        <span class="stat-icon">🌤️</span>
+        <h3>Weather</h3>
+        <p class="stat-value">{{ weather.temperature }}°C</p>
+        <p>Humidity: {{ weather.humidity }}% · Rainfall: {{ weather.rainfall }}</p>
+      </article>
+
+      <article class="stat-card">
+        <span class="stat-icon">💧</span>
+        <h3>Irrigation</h3>
+        <p class="stat-value">{{ irrigation.status }}</p>
+        <p>Water usage: {{ irrigation.waterUsage }} {{ irrigation.unit }}</p>
+      </article>
+    </section>
+
+    <section class="content-card">
+      <h2>Register a New Crop</h2>
+      <p>Add crop details to save them in your MySQL database.</p>
+
+      <form (ngSubmit)="registerCrop()" #cropNgForm="ngForm">
+        <div class="crop-form-grid">
+          <div class="form-group">
+            <label for="cropName">Crop Name</label>
+            <input
+              id="cropName"
+              type="text"
+              name="cropName"
+              [(ngModel)]="cropForm.name"
+              placeholder="e.g. Maize"
+              required />
+          </div>
+
+          <div class="form-group">
+            <label for="cropSeason">Season</label>
+            <select
+              id="cropSeason"
+              name="cropSeason"
+              [(ngModel)]="cropForm.season"
+              required>
+              <option value="Kharif">Kharif</option>
+              <option value="Rabi">Rabi</option>
+              <option value="Summer">Summer</option>
+              <option value="Winter">Winter</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="cropArea">Area (acres)</label>
+            <input
+              id="cropArea"
+              type="number"
+              name="cropArea"
+              [(ngModel)]="cropForm.area"
+              min="0.1"
+              step="0.1"
+              required />
+          </div>
+
+          <div class="form-group">
+            <label for="cropStatus">Status</label>
+            <select
+              id="cropStatus"
+              name="cropStatus"
+              [(ngModel)]="cropForm.status"
+              required>
+              <option value="Growing">Growing</option>
+              <option value="Ready for planting">Ready for planting</option>
+              <option value="Harvested">Harvested</option>
+            </select>
+          </div>
+        </div>
+
+        <button
+          class="primary-button"
+          type="submit"
+          [disabled]="savingCrop || cropNgForm.invalid">
+          {{ savingCrop ? 'Saving...' : 'Register Crop' }}
+        </button>
+      </form>
+    </section>
+
+    <section class="content-card">
+      <h2>Saved Crops</h2>
+      <p>Crops retrieved from your database.</p>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+          <tr>
+            <th>ID</th>
+            <th>Crop Name</th>
+            <th>Season</th>
+            <th>Area (acres)</th>
+            <th>Status</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr *ngFor="let crop of crops">
+            <td>{{ crop.id }}</td>
+            <td>{{ crop.name }}</td>
+            <td>{{ crop.season }}</td>
+            <td>{{ crop.area }}</td>
+            <td><span class="status-badge">{{ crop.status }}</span></td>
+          </tr>
+          <tr *ngIf="!loading && crops.length === 0">
+            <td colspan="5">No crops registered yet.</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
